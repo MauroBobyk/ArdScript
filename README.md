@@ -57,6 +57,12 @@ Contiene únicamente los estilos visuales:
 
 Este archivo. Documenta la instalación, el funcionamiento y las limitaciones del proyecto.
 
+## Licencia
+
+Este proyecto está disponible bajo la licencia MIT.
+
+Consulta el archivo [LICENSE](LICENSE) para ver el texto completo.
+
 ## Dependencia externa
 
 La aplicación carga este archivo desde jsDelivr:
