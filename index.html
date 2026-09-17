@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Control Arduino</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="panel">
+    <div class="status" id="status">
+      <span class="status-dot" aria-hidden="true"></span>
+      <span class="status-text" id="status-text">Desconectado</span>
+    </div>
+
+    <div class="settings">
+      <label for="baud-rate">Baudios:</label>
+      <select id="baud-rate">
+        <option value="9600">9600 — Arduino</option>
+        <option value="115200" selected>115200 — ESP32</option>
+        <option value="19200">19200</option>
+        <option value="38400">38400</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <button id="usb-button" type="button">Conectar por<br>USB</button>
+      <button id="bluetooth-button" type="button">Conectar por<br>Bluetooth</button>
+      <button class="secondary" id="disconnect-button" type="button" disabled>Desconectar</button>
+    </div>
+
+    <div class="command-row">
+      <input id="command" type="text" placeholder="Escribe un comando..." autocomplete="off">
+      <button id="send-button" type="button" disabled>Enviar</button>
+    </div>
+
+    <div id="console" role="log" aria-live="polite">Cargando arduino-usb.js...</div>
+
+    <div class="camera-preview" id="camera-preview">
+      <video id="camera-video" autoplay playsinline muted></video>
+      <img id="captured-photo" alt="Foto capturada">
+    </div>
+
+    <div class="row">
+      <button id="camera-button" type="button">▣ Cámara</button>
+      <button class="secondary" id="capture-button" type="button" disabled>▣ Capturar foto</button>
+      <button class="secondary" id="stop-camera-button" type="button" disabled>Detener cámara</button>
+    </div>
+  </main>
+
+  <script
+    src="https://cdn.jsdelivr.net/gh/MauroBobyk/ArdComp@main/arduino-usb.js"
+  ></script>
+  <script>
+    const arduino = new ArduinoUSB({ lineEnding: '\n' });
+    const status = document.getElementById('status');
+    const statusText = document.getElementById('status-text');
+    const consoleOutput = document.getElementById('console');
+    const commandInput = document.getElementById('command');
+    const disconnectButton = document.getElementById('disconnect-button');
+    const sendButton = document.getElementById('send-button');
+    const cameraPreview = document.getElementById('camera-preview');
+    const cameraVideo = document.getElementById('camera-video');
+    const capturedPhoto = document.getElementById('captured-photo');
+    let cameraStream = null;
+
+    function log(message) {
+      if (consoleOutput.textContent === 'Cargando arduino-usb.js...') consoleOutput.textContent = '';
+      consoleOutput.textContent += `${message}\n`;
+      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    }
+
+    function setConnected(connected, transport) {
+      status.classList.toggle('connected', connected);
+      statusText.textContent = connected ? `Conectado por ${transport === 'usb' ? 'USB' : 'Bluetooth'}` : 'Desconectado';
+      disconnectButton.disabled = !connected;
+      sendButton.disabled = !connected;
+    }
+
+    arduino.addEventListener('connect', (event) => {
+      setConnected(true, event.detail.transport);
+      log(`✓ Conectado por ${event.detail.transport === 'usb' ? 'USB' : 'Bluetooth'}`);
+    });
+
+    arduino.addEventListener('data', (event) => log(`← ${event.detail}`));
+    arduino.addEventListener('disconnect', () => {
+      setConnected(false);
+      log('Desconectado.');
+    });
+    arduino.addEventListener('error', (event) => log(`⚠ ${event.detail.message || event.detail}`));
+
+    document.getElementById('usb-button').addEventListener('click', async () => {
+      try {
+        await arduino.connectUSB({ baudRate: Number(document.getElementById('baud-rate').value) });
+      } catch (error) {
+        log(`⚠ ${error.message}`);
+      }
+    });
+
+    document.getElementById('bluetooth-button').addEventListener('click', async () => {
+      try {
+        await arduino.connectBluetooth();
+      } catch (error) {
+        log(`⚠ ${error.message}`);
+      }
+    });
+
+    disconnectButton.addEventListener('click', () => arduino.disconnect().catch((error) => log(`⚠ ${error.message}`)));
+    sendButton.addEventListener('click', async () => {
+      const command = commandInput.value.trim();
+      if (!command) return;
+      try {
+        await arduino.sendLine(command);
+        log(`→ ${command}`);
+        commandInput.value = '';
+      } catch (error) {
+        log(`⚠ ${error.message}`);
+      }
+    });
+    commandInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') sendButton.click();
+    });
+
+    document.getElementById('camera-button').addEventListener('click', async () => {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        cameraVideo.srcObject = cameraStream;
+        cameraPreview.classList.add('visible');
+        document.getElementById('capture-button').disabled = false;
+        document.getElementById('stop-camera-button').disabled = false;
+        log('✓ Cámara activada.');
+      } catch (error) {
+        log(`⚠ ${error.message}`);
+      }
+    });
+
+    document.getElementById('capture-button').addEventListener('click', () => {
+      if (!cameraVideo.videoWidth) return;
+      const canvas = document.createElement('canvas');
+      canvas.width = cameraVideo.videoWidth;
+      canvas.height = cameraVideo.videoHeight;
+      canvas.getContext('2d').drawImage(cameraVideo, 0, 0);
+      capturedPhoto.src = canvas.toDataURL('image/png');
+      capturedPhoto.style.display = 'block';
+      log('✓ Foto capturada.');
+    });
+
+    document.getElementById('stop-camera-button').addEventListener('click', () => {
+      if (cameraStream) cameraStream.getTracks().forEach((track) => track.stop());
+      cameraStream = null;
+      cameraVideo.srcObject = null;
+      cameraPreview.classList.remove('visible');
+      document.getElementById('capture-button').disabled = true;
+      document.getElementById('stop-camera-button').disabled = true;
+      log('Cámara detenida.');
+    });
+
+    if (!arduino.usbSupported) log('⚠ Web Serial no soportado en este navegador.');
+    if (!arduino.bluetoothSupported) log('⚠ Web Bluetooth no soportado en este navegador.');
+    if (arduino.usbSupported || arduino.bluetoothSupported) log('Listo para conectar.');
+  </script>
+</body>
+</html>
