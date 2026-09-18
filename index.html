@@ -48,8 +48,14 @@
     </div>
   </main>
 
-  <script
+  <!--
+    Pinnado al commit con el fix de Web Bluetooth (acceptAllDevices).
+    jsDelivr cachea las RAMAS (@main) 12 horas, por eso @main todavia
+    servia la version vieja. Volver a @main cuando expire el cache:
     src="https://cdn.jsdelivr.net/gh/MauroBobyk/ArdComp@main/arduino-usb.js"
+  -->
+  <script
+    src="https://cdn.jsdelivr.net/gh/MauroBobyk/ArdComp@f0e50d5cfadd346ac9268b09aca662ef3cf797bf/arduino-usb.js"
   ></script>
   <script>
     const arduino = new ArduinoUSB({ lineEnding: '\n' });
